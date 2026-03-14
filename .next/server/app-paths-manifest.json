@@ -1,6 +1,7 @@
 {
+  "/_not-found/page": "app/_not-found/page.js",
   "/employees/page": "app/employees/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
   "/login/page": "app/login/page.js",
-  "/payroll/page": "app/payroll/page.js",
-  "/dashboard/page": "app/dashboard/page.js"
+  "/biometric/page": "app/biometric/page.js"
 }
