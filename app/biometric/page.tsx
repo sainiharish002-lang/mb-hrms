@@ -111,7 +111,7 @@ export default function BiometricPage() {
     }
 
     setPreview(rows.slice(0,200))
-    setUnmatched([...noMatch])
+    setUnmatched(Array.from(noMatch))
   }
 
   async function confirmImport() {
