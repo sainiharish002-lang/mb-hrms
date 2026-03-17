@@ -1,57 +1,33 @@
 'use client'
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 
 export default function LoginPage() {
-  const router = useRouter()
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError]       = useState('')
-  const [loading, setLoading]   = useState(false)
+  const [email, setEmail]     = useState('')
+  const [sent, setSent]       = useState(false)
+  const [error, setError]     = useState('')
+  const [loading, setLoading] = useState(false)
 
-  // Simple credentials check (same as original HTML)
   async function handleLogin() {
     setError('')
+    if (!email) { setError('Email daalo'); return }
     setLoading(true)
 
-    // Admin login (non-Supabase Auth — simple check)
-    if (username === 'admin' && password === 'admin123') {
-      // Store session in cookie via Supabase anon sign-in
-      // For production: use Supabase Auth with real email accounts
-      document.cookie = 'mb_role=admin; path=/'
-      document.cookie = 'mb_user=Admin; path=/'
-      router.push('/dashboard')
-      return
+    const supabase = createClient()
+    const { error: err } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+      },
+    })
+
+    if (err) {
+      setError(err.message)
+      setLoading(false)
+    } else {
+      setSent(true)
+      setLoading(false)
     }
-
-    if (username === 'hr' && password === 'hr123') {
-      document.cookie = 'mb_role=hr; path=/'
-      document.cookie = 'mb_user=HR Manager; path=/'
-      router.push('/dashboard')
-      return
-    }
-
-    // Employee login — check employee ID against Supabase
-    if (username.toUpperCase().startsWith('MB')) {
-      const supabase = createClient()
-      const { data } = await supabase
-        .from('employees')
-        .select('id, name')
-        .eq('id', username.toUpperCase())
-        .single()
-
-      if (data && password === 'emp123') {
-        document.cookie = `mb_role=employee; path=/`
-        document.cookie = `mb_user=${data.name}; path=/`
-        document.cookie = `mb_emp_id=${data.id}; path=/`
-        router.push('/dashboard')
-        return
-      }
-    }
-
-    setError('Invalid username or password')
-    setLoading(false)
   }
 
   return (
@@ -78,50 +54,54 @@ export default function LoginPage() {
           <div style={{ fontSize: 12, color: 'var(--gray-400)', marginTop: 4 }}>HR & Payroll System</div>
         </div>
 
-        {/* Form */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div className="form-group">
-            <label className="form-label">Username</label>
-            <input
-              className="form-input"
-              placeholder="admin / hr / MB001"
-              value={username}
-              onChange={e => setUsername(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleLogin()}
-            />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Password</label>
-            <input
-              className="form-input"
-              type="password"
-              placeholder="Password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleLogin()}
-            />
-          </div>
-
-          {error && (
-            <div style={{ background: 'var(--red-light)', color: 'var(--red)', padding: '10px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600 }}>
-              ❌ {error}
+        {sent ? (
+          /* Success State */
+          <div style={{ textAlign: 'center', padding: '10px 0' }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>✉️</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--gray-800)' }}>
+              Magic Link Bheja Gaya!
             </div>
-          )}
+            <div style={{ fontSize: 13, color: 'var(--gray-400)', marginTop: 8 }}>
+              <strong>{email}</strong> pe link check karo aur click karo.
+            </div>
+            <button
+              style={{ marginTop: 20, fontSize: 12, color: 'var(--blue)', background: 'none', border: 'none', cursor: 'pointer' }}
+              onClick={() => { setSent(false); setEmail('') }}
+            >
+              Doosra email use karo
+            </button>
+          </div>
+        ) : (
+          /* Login Form */
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div className="form-group">
+              <label className="form-label">Email</label>
+              <input
+                className="form-input"
+                type="email"
+                placeholder="you@motionbrains.in"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleLogin()}
+              />
+            </div>
 
-          <button
-            className="btn btn-primary"
-            style={{ width: '100%', justifyContent: 'center', padding: '12px', marginTop: 4 }}
-            onClick={handleLogin}
-            disabled={loading}
-          >
-            {loading ? 'Signing in...' : 'Sign In →'}
-          </button>
-        </div>
+            {error && (
+              <div style={{ background: 'var(--red-light)', color: 'var(--red)', padding: '10px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600 }}>
+                ❌ {error}
+              </div>
+            )}
 
-        {/* Demo credentials */}
-        <div style={{ marginTop: 20, padding: '12px 14px', background: 'var(--blue-pale)', borderRadius: 8, fontSize: 11, color: 'var(--gray-600)' }}>
-          <strong>Demo:</strong> admin / admin123 &nbsp;|&nbsp; hr / hr123 &nbsp;|&nbsp; MB001 / emp123
-        </div>
+            <button
+              className="btn btn-primary"
+              style={{ width: '100%', justifyContent: 'center', padding: '12px', marginTop: 4 }}
+              onClick={handleLogin}
+              disabled={loading}
+            >
+              {loading ? 'Bhej raha hoon...' : 'Magic Link Bhejo →'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
