@@ -1,32 +1,31 @@
 'use client'
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
+import { useRouter } from 'next/navigation'
 
 export default function LoginPage() {
-  const [email, setEmail]     = useState('')
-  const [sent, setSent]       = useState(false)
-  const [error, setError]     = useState('')
-  const [loading, setLoading] = useState(false)
+  const router = useRouter()
+  const [email, setEmail]       = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError]       = useState('')
+  const [loading, setLoading]   = useState(false)
 
   async function handleLogin() {
     setError('')
-    if (!email) { setError('Email daalo'); return }
+    if (!email || !password) { setError('Email aur password daalo'); return }
     setLoading(true)
 
     const supabase = createClient()
-    const { error: err } = await supabase.auth.signInWithOtp({
+    const { error: err } = await supabase.auth.signInWithPassword({
       email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
+      password,
     })
 
     if (err) {
-      setError(err.message)
+      setError('Invalid email ya password')
       setLoading(false)
     } else {
-      setSent(true)
-      setLoading(false)
+      router.push('/dashboard')
     }
   }
 
@@ -54,54 +53,46 @@ export default function LoginPage() {
           <div style={{ fontSize: 12, color: 'var(--gray-400)', marginTop: 4 }}>HR & Payroll System</div>
         </div>
 
-        {sent ? (
-          /* Success State */
-          <div style={{ textAlign: 'center', padding: '10px 0' }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>✉️</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--gray-800)' }}>
-              Magic Link Bheja Gaya!
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--gray-400)', marginTop: 8 }}>
-              <strong>{email}</strong> pe link check karo aur click karo.
-            </div>
-            <button
-              style={{ marginTop: 20, fontSize: 12, color: 'var(--blue)', background: 'none', border: 'none', cursor: 'pointer' }}
-              onClick={() => { setSent(false); setEmail('') }}
-            >
-              Doosra email use karo
-            </button>
+        {/* Form */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div className="form-group">
+            <label className="form-label">Email</label>
+            <input
+              className="form-input"
+              type="email"
+              placeholder="you@motionbrains.in"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleLogin()}
+            />
           </div>
-        ) : (
-          /* Login Form */
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div className="form-group">
-              <label className="form-label">Email</label>
-              <input
-                className="form-input"
-                type="email"
-                placeholder="you@motionbrains.in"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleLogin()}
-              />
-            </div>
-
-            {error && (
-              <div style={{ background: 'var(--red-light)', color: 'var(--red)', padding: '10px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600 }}>
-                ❌ {error}
-              </div>
-            )}
-
-            <button
-              className="btn btn-primary"
-              style={{ width: '100%', justifyContent: 'center', padding: '12px', marginTop: 4 }}
-              onClick={handleLogin}
-              disabled={loading}
-            >
-              {loading ? 'Bhej raha hoon...' : 'Magic Link Bhejo →'}
-            </button>
+          <div className="form-group">
+            <label className="form-label">Password</label>
+            <input
+              className="form-input"
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleLogin()}
+            />
           </div>
-        )}
+
+          {error && (
+            <div style={{ background: 'var(--red-light)', color: 'var(--red)', padding: '10px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600 }}>
+              ❌ {error}
+            </div>
+          )}
+
+          <button
+            className="btn btn-primary"
+            style={{ width: '100%', justifyContent: 'center', padding: '12px', marginTop: 4 }}
+            onClick={handleLogin}
+            disabled={loading}
+          >
+            {loading ? 'Signing in...' : 'Sign In →'}
+          </button>
+        </div>
       </div>
     </div>
   )
