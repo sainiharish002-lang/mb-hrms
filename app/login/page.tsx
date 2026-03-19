@@ -16,17 +16,37 @@ export default function LoginPage() {
     setLoading(true)
 
     const supabase = createClient()
-    const { error: err } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+    const { data, error: err } = await supabase.auth.signInWithPassword({ email, password })
 
     if (err) {
       setError('Invalid email ya password')
       setLoading(false)
-    } else {
-      router.push('/dashboard')
+      return
     }
+
+    // Status + Role check
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role, status')
+      .eq('id', data.user.id)
+      .single()
+
+    if (profile?.status === 'pending') {
+      await supabase.auth.signOut()
+      setError('⏳ Tumhara account admin approval ke liye pending hai.')
+      setLoading(false)
+      return
+    }
+
+    if (profile?.status === 'inactive') {
+      await supabase.auth.signOut()
+      setError('🚫 Tumhara account deactivate kar diya gaya hai.')
+      setLoading(false)
+      return
+    }
+
+    if (profile?.role === 'admin') router.push('/dashboard')
+    else router.push('/employee/dashboard')
   }
 
   return (
@@ -80,7 +100,7 @@ export default function LoginPage() {
 
           {error && (
             <div style={{ background: 'var(--red-light)', color: 'var(--red)', padding: '10px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600 }}>
-              ❌ {error}
+              {error}
             </div>
           )}
 
@@ -92,6 +112,12 @@ export default function LoginPage() {
           >
             {loading ? 'Signing in...' : 'Sign In →'}
           </button>
+
+          {/* Signup Link */}
+          <p style={{ textAlign: 'center', fontSize: 12, color: '#666', margin: 0 }}>
+            New employee?{' '}
+            <a href="/signup" style={{ color: '#1E6FD9' }}>Sign up karo</a>
+          </p>
         </div>
       </div>
     </div>
