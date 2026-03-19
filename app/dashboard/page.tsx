@@ -19,8 +19,6 @@ export default function Dashboard() {
 
   useEffect(() => {
     async function load() {
-useEffect(() => {
-    async function load() {
       // ✅ Auth + Role check
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { window.location.href = '/login'; return }
@@ -36,8 +34,6 @@ useEffect(() => {
         return
       }
 
-      // Baaki existing code same rahega
-      const [empRes, leaveRes, pendingRes, apprRes, todayAttRes] = await Promise.all([
       const [empRes, leaveRes, pendingRes, apprRes, todayAttRes] = await Promise.all([
         supabase.from('employees').select('id,salary,status').eq('status','active'),
         supabase.from('leave_requests').select('*').eq('status','approved')
@@ -60,7 +56,6 @@ useEffect(() => {
 
       setRecentLeaves(leaveRes.data || [])
 
-      // Top performers by avg score
       const performers = (apprRes.data || []).map((a:any) => {
         const scores = [a.q1,a.q2,a.q3,a.q4].filter((s:number)=>s>0)
         const avg = scores.length ? Math.round(scores.reduce((x:number,y:number)=>x+y,0)/scores.length) : 0
@@ -78,7 +73,6 @@ useEffect(() => {
   return (
     <Layout>
       <div className="page">
-        {/* Stats */}
         <div className="stats-row">
           <div className="stat-card blue">
             <div className="stat-header">
@@ -132,7 +126,6 @@ useEffect(() => {
         </div>
 
         <div className="grid-2">
-          {/* Quick Actions */}
           <div className="card">
             <div className="card-header">
               <div>
@@ -163,7 +156,6 @@ useEffect(() => {
             </div>
           </div>
 
-          {/* Leave Today */}
           <div className="card">
             <div className="card-header">
               <div>
@@ -195,7 +187,6 @@ useEffect(() => {
           </div>
         </div>
 
-        {/* Top Performers */}
         <div className="card">
           <div className="card-header">
             <div>
