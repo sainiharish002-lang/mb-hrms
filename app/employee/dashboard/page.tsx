@@ -1,20 +1,15 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { useRouter } from 'next/navigation'
 
 export default function EmployeeDashboard() {
-  const router = useRouter()
   const [data, setData] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function load() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
-
-      // Login nahi hai toh login page pe bhejo
-      if (!user) { router.push('/login'); return }
+      if (!user) return
 
       const { data: profile } = await supabase
         .from('profiles')
@@ -22,29 +17,10 @@ export default function EmployeeDashboard() {
         .eq('id', user.id)
         .single()
 
-      // Pending/inactive toh login pe bhejo
-      if (!profile || profile.status === 'pending' || profile.status === 'inactive') {
-        router.push('/login')
-        return
-      }
-
-      // Admin ko admin dashboard pe bhejo
-      if (profile.role === 'admin') {
-        router.push('/dashboard')
-        return
-      }
-
       setData(profile)
-      setLoading(false)
     }
     load()
   }, [])
-
-  if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#f5f7fa' }}>
-      <div>Loading...</div>
-    </div>
-  )
 
   return (
     <div style={{ padding: 32 }}>
