@@ -19,6 +19,25 @@ export default function Dashboard() {
 
   useEffect(() => {
     async function load() {
+useEffect(() => {
+    async function load() {
+      // ✅ Auth + Role check
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { window.location.href = '/login'; return }
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+
+      if (!profile || profile.role !== 'admin') {
+        window.location.href = '/employee/dashboard'
+        return
+      }
+
+      // Baaki existing code same rahega
+      const [empRes, leaveRes, pendingRes, apprRes, todayAttRes] = await Promise.all([
       const [empRes, leaveRes, pendingRes, apprRes, todayAttRes] = await Promise.all([
         supabase.from('employees').select('id,salary,status').eq('status','active'),
         supabase.from('leave_requests').select('*').eq('status','approved')
