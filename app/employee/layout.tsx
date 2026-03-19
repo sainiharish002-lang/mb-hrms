@@ -21,10 +21,14 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
         .eq('id', user.id)
         .single()
 
-      if (!profile || profile.role === 'admin') {
-        router.push('/dashboard')
-        return
-      }
+      if (!profile) {
+  router.push('/login')  // ✅ Profile null = login pe bhejo
+  return
+}
+if (profile.role === 'admin') {
+  router.push('/dashboard')
+  return
+}
       if (profile.status === 'pending' || profile.status === 'inactive') {
         router.push('/login')
         return
