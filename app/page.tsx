@@ -1,18 +1,39 @@
-import { createServerSupabaseClient } from '@/lib/supabase-server'
-import { redirect } from 'next/navigation'
+'use client'
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase'
 
-export default async function RootPage() {
-  const supabase = createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
+export default function RootPage() {
+  const router = useRouter()
 
-  if (!user) redirect('/login')
+  useEffect(() => {
+    async function check() {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
+      if (!user) { router.push('/login'); return }
 
-  if (profile?.role === 'admin') redirect('/dashboard')
-  else redirect('/employee/dashboard')
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role, status')
+        .eq('id', user.id)
+        .single()
+
+      if (!profile || profile.status === 'pending' || profile.status === 'inactive') {
+        await supabase.auth.signOut()
+        router.push('/login')
+        return
+      }
+
+      if (profile.role === 'admin') router.push('/dashboard')
+      else router.push('/employee/dashboard')
+    }
+    check()
+  }, [])
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
+      <div>Loading...</div>
+    </div>
+  )
 }
