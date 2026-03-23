@@ -16,6 +16,7 @@ export default function Dashboard() {
   const [recentLeaves, setRecentLeaves] = useState<any[]>([])
   const [topPerformers, setTopPerformers] = useState<any[]>([])
   const today = new Date().toISOString().split('T')[0]
+  const [pendingUsers, setPendingUsers] = useState<any[]>([])
 
   useEffect(() => {
     async function load() {
@@ -29,6 +30,14 @@ export default function Dashboard() {
         supabase.from('leave_requests').select('id',{count:'exact'}).eq('status','pending'),
         supabase.from('appraisals').select('emp_id,q1,q2,q3,q4,employees(name,designation,color)').eq('year', new Date().getFullYear()),
         supabase.from('attendance').select('emp_id,status').eq('date', today),
+	
+	// Pending signups
+const { data: pending } = await supabase
+  .from('profiles')
+  .select('*')
+  .eq('status', 'pending')
+  .eq('role', 'employee')
+setPendingUsers(pending || [])
       ])
 
       const emps = empRes.data || []
@@ -174,6 +183,49 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+
+
+	{/* Pending Approvals */}
+{pendingUsers.length > 0 && (
+  <div className="card" style={{ border: '2px solid #FDE68A', marginBottom: 20 }}>
+    <div className="card-header">
+      <div>
+        <div className="card-title">⏳ Pending Employee Approvals</div>
+        <div className="card-subtitle">{pendingUsers.length} employee(s) waiting</div>
+      </div>
+    </div>
+    <div className="card-body">
+      {pendingUsers.map(u => (
+        <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>{u.full_name || 'Unknown'}</div>
+            <div style={{ fontSize: 12, color: '#666' }}>{u.email}</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={async () => {
+                const supabase = createClient()
+                await supabase.from('profiles').update({ status: 'active' }).eq('id', u.id)
+                setPendingUsers(prev => prev.filter(p => p.id !== u.id))
+              }}
+              style={{ padding: '6px 14px', borderRadius: 6, background: '#dcfce7', color: '#16a34a', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+              ✅ Approve
+            </button>
+            <button
+              onClick={async () => {
+                const supabase = createClient()
+                await supabase.from('profiles').update({ status: 'inactive' }).eq('id', u.id)
+                setPendingUsers(prev => prev.filter(p => p.id !== u.id))
+              }}
+              style={{ padding: '6px 14px', borderRadius: 6, background: '#fee2e2', color: '#dc2626', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+              ❌ Reject
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
 
         <div className="card">
           <div className="card-header">
