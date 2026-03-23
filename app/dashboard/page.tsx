@@ -12,32 +12,21 @@ function fmtCurrency(n: number) {
 
 export default function Dashboard() {
   const supabase = createClient()
-  const [stats, setStats] = useState({ total: 0, onLeave: 0, pending: 0, grossPayroll: 0 })
+  const [stats, setStats]             = useState({ total: 0, onLeave: 0, pending: 0, grossPayroll: 0 })
   const [recentLeaves, setRecentLeaves] = useState<any[]>([])
   const [topPerformers, setTopPerformers] = useState<any[]>([])
+  const [pendingUsers, setPendingUsers]   = useState<any[]>([])
   const today = new Date().toISOString().split('T')[0]
-  const [pendingUsers, setPendingUsers] = useState<any[]>([])
 
   useEffect(() => {
     async function load() {
-      // ✅ Auth + Role check
-      
-
-      const [empRes, leaveRes, pendingRes, apprRes, todayAttRes] = await Promise.all([
+      const [empRes, leaveRes, pendingRes, apprRes, todayAttRes, pendingUsersRes] = await Promise.all([
         supabase.from('employees').select('id,salary,status').eq('status','active'),
-        supabase.from('leave_requests').select('*').eq('status','approved')
-          .eq('from_date', today).limit(5),
+        supabase.from('leave_requests').select('*').eq('status','approved').eq('from_date', today).limit(5),
         supabase.from('leave_requests').select('id',{count:'exact'}).eq('status','pending'),
         supabase.from('appraisals').select('emp_id,q1,q2,q3,q4,employees(name,designation,color)').eq('year', new Date().getFullYear()),
         supabase.from('attendance').select('emp_id,status').eq('date', today),
-	
-	// Pending signups
-const { data: pending } = await supabase
-  .from('profiles')
-  .select('*')
-  .eq('status', 'pending')
-  .eq('role', 'employee')
-setPendingUsers(pending || [])
+        supabase.from('profiles').select('*').eq('status','pending').eq('role','employee'),
       ])
 
       const emps = empRes.data || []
@@ -52,6 +41,7 @@ setPendingUsers(pending || [])
       })
 
       setRecentLeaves(leaveRes.data || [])
+      setPendingUsers(pendingUsersRes.data || [])
 
       const performers = (apprRes.data || []).map((a:any) => {
         const scores = [a.q1,a.q2,a.q3,a.q4].filter((s:number)=>s>0)
@@ -70,6 +60,48 @@ setPendingUsers(pending || [])
   return (
     <Layout>
       <div className="page">
+
+        {/* Pending Approvals — TOP PE */}
+        {pendingUsers.length > 0 && (
+          <div className="card" style={{ border: '2px solid #FDE68A', marginBottom: 20 }}>
+            <div className="card-header">
+              <div>
+                <div className="card-title">⏳ Pending Employee Approvals</div>
+                <div className="card-subtitle">{pendingUsers.length} employee(s) approval ka wait kar rahe hain</div>
+              </div>
+            </div>
+            <div className="card-body">
+              {pendingUsers.map(u => (
+                <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600 }}>{u.full_name || 'Unknown'}</div>
+                    <div style={{ fontSize: 12, color: '#666' }}>{u.email}</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      onClick={async () => {
+                        await supabase.from('profiles').update({ status: 'active' }).eq('id', u.id)
+                        setPendingUsers(prev => prev.filter(p => p.id !== u.id))
+                      }}
+                      style={{ padding: '6px 14px', borderRadius: 6, background: '#dcfce7', color: '#16a34a', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                      ✅ Approve
+                    </button>
+                    <button
+                      onClick={async () => {
+                        await supabase.from('profiles').update({ status: 'inactive' }).eq('id', u.id)
+                        setPendingUsers(prev => prev.filter(p => p.id !== u.id))
+                      }}
+                      style={{ padding: '6px 14px', borderRadius: 6, background: '#fee2e2', color: '#dc2626', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                      ❌ Reject
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Stats */}
         <div className="stats-row">
           <div className="stat-card blue">
             <div className="stat-header">
@@ -82,7 +114,6 @@ setPendingUsers(pending || [])
               <span className="stat-period">team members</span>
             </div>
           </div>
-
           <div className="stat-card green">
             <div className="stat-header">
               <div className="stat-label">Gross Payroll</div>
@@ -94,7 +125,6 @@ setPendingUsers(pending || [])
               <span className="stat-period">total salary</span>
             </div>
           </div>
-
           <div className="stat-card amber">
             <div className="stat-header">
               <div className="stat-label">On Leave Today</div>
@@ -106,7 +136,6 @@ setPendingUsers(pending || [])
               <span className="stat-period">today</span>
             </div>
           </div>
-
           <div className="stat-card purple">
             <div className="stat-header">
               <div className="stat-label">Pending Leaves</div>
@@ -184,49 +213,7 @@ setPendingUsers(pending || [])
           </div>
         </div>
 
-
-	{/* Pending Approvals */}
-{pendingUsers.length > 0 && (
-  <div className="card" style={{ border: '2px solid #FDE68A', marginBottom: 20 }}>
-    <div className="card-header">
-      <div>
-        <div className="card-title">⏳ Pending Employee Approvals</div>
-        <div className="card-subtitle">{pendingUsers.length} employee(s) waiting</div>
-      </div>
-    </div>
-    <div className="card-body">
-      {pendingUsers.map(u => (
-        <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 600 }}>{u.full_name || 'Unknown'}</div>
-            <div style={{ fontSize: 12, color: '#666' }}>{u.email}</div>
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              onClick={async () => {
-                const supabase = createClient()
-                await supabase.from('profiles').update({ status: 'active' }).eq('id', u.id)
-                setPendingUsers(prev => prev.filter(p => p.id !== u.id))
-              }}
-              style={{ padding: '6px 14px', borderRadius: 6, background: '#dcfce7', color: '#16a34a', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-              ✅ Approve
-            </button>
-            <button
-              onClick={async () => {
-                const supabase = createClient()
-                await supabase.from('profiles').update({ status: 'inactive' }).eq('id', u.id)
-                setPendingUsers(prev => prev.filter(p => p.id !== u.id))
-              }}
-              style={{ padding: '6px 14px', borderRadius: 6, background: '#fee2e2', color: '#dc2626', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-              ❌ Reject
-            </button>
-          </div>
-        </div>
-      ))}
-    </div>
-  </div>
-)}
-
+        {/* Top Performers */}
         <div className="card">
           <div className="card-header">
             <div>
