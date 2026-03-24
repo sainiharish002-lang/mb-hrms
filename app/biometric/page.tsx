@@ -60,43 +60,63 @@ function parseCsvFile(text: string) {
 }
 
 // ── Excel Parser ──
+// ── Excel Parser — eSSL Monthly Punch Report ──
 async function parseExcelFile(file: File): Promise<{ bioName: string; dateTime: Date }[]> {
   return new Promise((resolve) => {
     const reader = new FileReader()
     reader.onload = (e) => {
       const data = new Uint8Array(e.target?.result as ArrayBuffer)
-      const workbook = XLSX.read(data, { type: 'array', cellDates: true })
+      const workbook = XLSX.read(data, { type: 'array' })
       const sheet = workbook.Sheets[workbook.SheetNames[0]]
-      const rows: any[] = XLSX.utils.sheet_to_json(sheet, { header: 1 })
+      const rows: any[] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' })
 
       const punches: { bioName: string; dateTime: Date }[] = []
-      const headerRow = rows[0]?.map((h: any) => String(h).toLowerCase()) || []
+      let currentName = ''
 
-      // Column index detect karo
-      const nameIdx = headerRow.findIndex((h: string) => h.includes('name') || h.includes('emp'))
-      const dateIdx = headerRow.findIndex((h: string) => h.includes('date') || h.includes('time') || h.includes('datetime'))
-      const timeIdx = headerRow.findIndex((h: string, i: number) => h.includes('time') && i !== dateIdx)
-
-      for (let i = 1; i < rows.length; i++) {
+      for (let i = 0; i < rows.length; i++) {
         const row = rows[i]
-        if (!row || row.length < 2) continue
-        const name = String(row[nameIdx >= 0 ? nameIdx : 0] || '').toLowerCase().trim()
-        if (!name) continue
+        const col0 = String(row[0] || '').trim()
+        const col1 = String(row[1] || '').trim()
+        const col2 = String(row[2] || '').trim()
+        const col6 = String(row[6] || '').trim()
 
-        let dt: Date
-        const dateVal = row[dateIdx >= 0 ? dateIdx : 1]
-        const timeVal = timeIdx >= 0 ? row[timeIdx] : null
-
-        if (dateVal instanceof Date) {
-          dt = dateVal
-        } else if (timeVal) {
-          dt = new Date(`${dateVal}T${timeVal}`)
-        } else {
-          dt = new Date(dateVal)
+        // Employee name row detect karo (CardNo row)
+        if (col0 && col0 !== 'CardNo' && /^\d+$/.test(col0) && col1) {
+          currentName = col1.trim()
+          continue
         }
 
-        if (isNaN(dt.getTime())) continue
-        punches.push({ bioName: name, dateTime: dt })
+        // Date + Swipe record row
+        if (!col0 && col2 && col6 && currentName) {
+          // Date parse — format: MM/DD/YYYY
+          const dateParts = col2.split('/')
+          if (dateParts.length !== 3) continue
+          const dateStr = `${dateParts[2]}-${dateParts[0].padStart(2,'0')}-${dateParts[1].padStart(2,'0')}`
+
+          // Swipe record se sab times nikalo
+          // Format: 09:33(1 Fp)16:32(1 Fp)16:32(1 Fp)
+          const timeMatches = col6.match(/(\d{2}:\d{2})/g)
+          if (!timeMatches || timeMatches.length === 0) continue
+
+          // Unique times sort karo
+          const uniqueTimes = [...new Set(timeMatches)].sort()
+
+          // First punch = Check In
+          const checkIn = uniqueTimes[0]
+          const dtIn = new Date(`${dateStr}T${checkIn}:00`)
+          if (!isNaN(dtIn.getTime())) {
+            punches.push({ bioName: currentName.toLowerCase(), dateTime: dtIn })
+          }
+
+          // Last punch = Check Out (agar alag hai checkIn se)
+          const checkOut = uniqueTimes[uniqueTimes.length - 1]
+          if (checkOut !== checkIn) {
+            const dtOut = new Date(`${dateStr}T${checkOut}:00`)
+            if (!isNaN(dtOut.getTime())) {
+              punches.push({ bioName: currentName.toLowerCase(), dateTime: dtOut })
+            }
+          }
+        }
       }
       resolve(punches)
     }
@@ -105,16 +125,27 @@ async function parseExcelFile(file: File): Promise<{ bioName: string; dateTime: 
 }
 
 // ── Group Punches ──
+// ── Group Punches ──
 function groupPunches(punches: { bioName: string; dateTime: Date }[]) {
-  const map: Record<string, { bioName: string; date: string; checkIn: string; checkOut: string | null; count: number }> = {}
+  const map: Record<string, {
+    bioName: string; date: string; checkIn: string; checkOut: string | null; count: number
+  }> = {}
+
   for (const p of punches) {
     const date = p.dateTime.toISOString().split('T')[0]
-    const key = `${p.bioName}|||${date}`
+    const key  = `${p.bioName}|||${date}`
     const time = p.dateTime.toTimeString().slice(0, 5)
-    if (!map[key]) map[key] = { bioName: p.bioName, date, checkIn: time, checkOut: null, count: 0 }
-    map[key].count++
-    if (time > map[key].checkIn) map[key].checkOut = time
+
+    if (!map[key]) {
+      map[key] = { bioName: p.bioName, date, checkIn: time, checkOut: null, count: 1 }
+    } else {
+      map[key].count++
+      // Earliest = checkIn, Latest = checkOut
+      if (time < map[key].checkIn) map[key].checkIn = time
+      if (time > (map[key].checkOut || map[key].checkIn)) map[key].checkOut = time
+    }
   }
+
   return Object.values(map)
 }
 
