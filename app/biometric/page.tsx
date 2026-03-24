@@ -99,7 +99,7 @@ async function parseExcelFile(file: File): Promise<{ bioName: string; dateTime: 
           if (!timeMatches || timeMatches.length === 0) continue
 
           // Unique times sort karo
-          const uniqueTimes = [...new Set(timeMatches)].sort()
+         const uniqueTimes = Array.from(new Set(timeMatches)).sort()
 
           // First punch = Check In
           const checkIn = uniqueTimes[0]
