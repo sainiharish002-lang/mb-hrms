@@ -21,8 +21,10 @@ export default function EmployeesPage() {
   const [filter, setFilter]       = useState('')
   const [modal, setModal]         = useState(false)
   const [editing, setEditing]     = useState<Partial<Employee>>(EMPTY_EMP)
+  const [originalId, setOriginalId] = useState('') // ID change track karne ke liye
   const [isNew, setIsNew]         = useState(true)
   const [saving, setSaving]       = useState(false)
+  const [saveMsg, setSaveMsg]     = useState('')
 
   async function load() {
     let q = supabase.from('employees').select('*').order('name')
@@ -40,34 +42,67 @@ export default function EmployeesPage() {
   )
 
   function openAdd() {
-    // Auto-generate next ID
     const maxNum = employees.reduce((mx, e) => {
       const n = parseInt(e.id.replace(/\D/g,'')) || 0
       return Math.max(mx, n)
     }, 0)
     const nextId = 'MB' + String(maxNum + 1).padStart(3, '0')
     setEditing({ ...EMPTY_EMP, id: nextId, color: COLORS[employees.length % COLORS.length] })
+    setOriginalId('')
     setIsNew(true)
+    setSaveMsg('')
     setModal(true)
   }
 
   function openEdit(emp: Employee) {
     setEditing({ ...emp })
+    setOriginalId(emp.id) // Original ID save karo
     setIsNew(false)
+    setSaveMsg('')
     setModal(true)
   }
 
   async function save() {
     if (!editing.id || !editing.name) return alert('ID and Name required')
     setSaving(true)
-    if (isNew) {
-      await supabase.from('employees').insert(editing)
-    } else {
-      await supabase.from('employees').update(editing).eq('id', editing.id!)
+    setSaveMsg('')
+
+    try {
+      if (isNew) {
+        // New employee add karo
+        const { error } = await supabase.from('employees').insert(editing)
+        if (error) throw error
+      } else {
+        // ID change hua hai?
+        if (editing.id !== originalId) {
+          // Safe function use karo
+          const { error } = await supabase.rpc('change_employee_id', {
+            old_id: originalId,
+            new_id: editing.id,
+          })
+          if (error) throw error
+        }
+
+        // Baaki fields update karo
+        const { id, ...updateData } = editing
+        const { error } = await supabase
+          .from('employees')
+          .update(updateData)
+          .eq('id', editing.id!)
+        if (error) throw error
+      }
+
+      setSaveMsg('✅ Saved!')
+      setTimeout(() => {
+        setModal(false)
+        setSaveMsg('')
+        load()
+      }, 800)
+    } catch (err: any) {
+      setSaveMsg('❌ Error: ' + (err.message || 'Something went wrong'))
     }
+
     setSaving(false)
-    setModal(false)
-    load()
   }
 
   async function del(id: string) {
@@ -75,6 +110,8 @@ export default function EmployeesPage() {
     await supabase.from('employees').delete().eq('id', id)
     load()
   }
+
+  const idChanged = !isNew && editing.id !== originalId
 
   return (
     <Layout>
@@ -149,26 +186,43 @@ export default function EmployeesPage() {
           <div className="modal-overlay open" onClick={e=>{ if(e.target===e.currentTarget) setModal(false) }}>
             <div className="modal">
               <div className="modal-header">
-                <div className="modal-title">{isNew ? '+ Add Employee' : 'Edit Employee'}</div>
+                <div className="modal-title">{isNew ? '+ Add Employee' : `Edit — ${originalId}`}</div>
                 <button className="modal-close" onClick={()=>setModal(false)}>✕</button>
               </div>
               <div className="modal-body">
                 <div className="form-grid cols-2">
+
+                  {/* Employee ID — Editable with warning */}
                   <div className="form-group">
-                    <label className="form-label">Employee ID *</label>
-                    <input className="form-input" value={editing.id||''} readOnly={!isNew}
-                      onChange={e=>setEditing({...editing,id:e.target.value})} />
+                    <label className="form-label">
+                      Employee ID *
+                      {!isNew && <span style={{ fontSize: 10, color: '#f59e0b', marginLeft: 6 }}>⚠️ Change with caution</span>}
+                    </label>
+                    <input
+                      className="form-input"
+                      value={editing.id||''}
+                      onChange={e=>setEditing({...editing, id: e.target.value.toUpperCase()})}
+                      style={{ borderColor: idChanged ? '#f59e0b' : undefined }}
+                    />
+                    {idChanged && (
+                      <div style={{ fontSize: 11, color: '#f59e0b', marginTop: 4 }}>
+                        ⚠️ ID change hoga: {originalId} → {editing.id} (Sab linked records update honge)
+                      </div>
+                    )}
                   </div>
+
                   <div className="form-group">
                     <label className="form-label">Full Name *</label>
                     <input className="form-input" value={editing.name||''}
                       onChange={e=>setEditing({...editing,name:e.target.value})} />
                   </div>
+
                   <div className="form-group">
                     <label className="form-label">Designation</label>
                     <input className="form-input" value={editing.designation||''}
                       onChange={e=>setEditing({...editing,designation:e.target.value})} />
                   </div>
+
                   <div className="form-group">
                     <label className="form-label">Department</label>
                     <select className="form-select" value={editing.department||''}
@@ -177,11 +231,13 @@ export default function EmployeesPage() {
                       {DEPTS.map(d=><option key={d} value={d}>{d}</option>)}
                     </select>
                   </div>
+
                   <div className="form-group">
                     <label className="form-label">Salary (₹)</label>
                     <input className="form-input" type="number" value={editing.salary||0}
                       onChange={e=>setEditing({...editing,salary:Number(e.target.value)})} />
                   </div>
+
                   <div className="form-group">
                     <label className="form-label">Status</label>
                     <select className="form-select" value={editing.status||'active'}
@@ -192,16 +248,19 @@ export default function EmployeesPage() {
                       <option value="inactive">Inactive</option>
                     </select>
                   </div>
+
                   <div className="form-group">
                     <label className="form-label">Phone</label>
                     <input className="form-input" value={editing.phone||''}
                       onChange={e=>setEditing({...editing,phone:e.target.value})} />
                   </div>
+
                   <div className="form-group">
                     <label className="form-label">Email</label>
                     <input className="form-input" type="email" value={editing.email||''}
                       onChange={e=>setEditing({...editing,email:e.target.value})} />
                   </div>
+
                   <div className="form-group">
                     <label className="form-label">Avatar Color</label>
                     <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:4 }}>
@@ -214,7 +273,29 @@ export default function EmployeesPage() {
                     </div>
                   </div>
                 </div>
+
+                {/* ID Change Warning */}
+                {idChanged && (
+                  <div style={{ marginTop: 16, padding: '12px 16px', background: '#fef9c3', borderRadius: 8, border: '1px solid #fde68a' }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#92400e' }}>⚠️ Employee ID Change Warning</div>
+                    <div style={{ fontSize: 12, color: '#78350f', marginTop: 4 }}>
+                      Yeh action in sab tables ko update karega: Attendance, Leave Requests, Payroll, Payslips, Appraisals
+                    </div>
+                  </div>
+                )}
+
+                {saveMsg && (
+                  <div style={{
+                    marginTop: 12, padding: '10px 14px', borderRadius: 8,
+                    fontSize: 13, fontWeight: 600,
+                    background: saveMsg.includes('✅') ? '#dcfce7' : '#fee2e2',
+                    color: saveMsg.includes('✅') ? '#16a34a' : '#dc2626'
+                  }}>
+                    {saveMsg}
+                  </div>
+                )}
               </div>
+
               <div className="modal-footer">
                 <button className="btn btn-outline" onClick={()=>setModal(false)}>Cancel</button>
                 <button className="btn btn-primary" onClick={save} disabled={saving}>
