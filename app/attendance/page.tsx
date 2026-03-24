@@ -5,6 +5,16 @@ import Layout from '@/components/Layout'
 import { calculateAttendance } from '@/lib/attendance'
 import type { Employee, AttendanceRecord } from '@/types'
 
+// Decimal hours → H:MM format
+function fmtHours(h: number): string {
+  if (!h || h <= 0) return '—'
+  const hours = Math.floor(h)
+  const mins  = Math.round((h - hours) * 60)
+  if (hours === 0) return `${mins}m`
+  if (mins === 0)  return `${hours}h`
+  return `${hours}h ${String(mins).padStart(2,'0')}m`
+}
+
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
     'Full Day': 'badge-fullday', 'Half Day': 'badge-halfday',
@@ -152,7 +162,7 @@ export default function AttendancePage() {
     setTimeout(() => setShiftMsg(''), 4000)
   }
 
-  async function resetToDefault(empId: string) {
+  function resetToDefault(empId: string) {
     setShifts(prev => ({
       ...prev,
       [empId]: {
@@ -183,8 +193,8 @@ export default function AttendancePage() {
       half_days:  e.records.filter((r:any)=>r.status==='Half Day').length,
       leaves:     e.records.filter((r:any)=>r.status==='Leave').length,
       absent:     e.records.filter((r:any)=>r.status==='Absent').length,
-      total_ot:   e.records.reduce((s:number,r:any)=>s+(r.ot_hours||0),0).toFixed(1),
-      total_st:   e.records.reduce((s:number,r:any)=>s+(r.st_hours||0),0).toFixed(1),
+      total_ot:   e.records.reduce((s:number,r:any)=>s+(r.ot_hours||0),0),
+      total_st:   e.records.reduce((s:number,r:any)=>s+(r.st_hours||0),0),
       late_count: e.records.filter((r:any)=>r.late_mins>0).length,
     }))
     setRepData(summary)
@@ -264,16 +274,21 @@ export default function AttendancePage() {
                               </div>
                             </div>
                           </td>
-                          {/* Shift timing display */}
-                          <td style={{ fontSize: 11, color: 'var(--gray-400)', fontFamily: 'DM Mono' }}>
-                            {s?.shift_start || '09:00'} – {s?.shift_end || '18:00'}
+
+                          {/* Shift timing */}
+                          <td style={{ fontSize:11, color:'var(--gray-400)', fontFamily:'DM Mono' }}>
+                            {s?.shift_start||'09:00'} – {s?.shift_end||'18:00'}
                           </td>
+
+                          {/* Check In */}
                           <td>
                             <input type="time" value={r.check_in}
                               onChange={e=>updateRow(emp.id,'check_in',e.target.value)}
                               className="form-input" style={{ width:120, padding:'6px 10px' }}
                             />
                           </td>
+
+                          {/* Check Out */}
                           <td>
                             <div>
                               <input type="time" value={r.check_out}
@@ -291,23 +306,35 @@ export default function AttendancePage() {
                               )}
                             </div>
                           </td>
+
+                          {/* Hours — H:MM format */}
                           <td className="mono" style={{ color: p?.is_night_shift ? 'var(--purple)':'inherit' }}>
-                            {p?.hours_worked ? `${p.hours_worked}h` : '—'}
+                            {fmtHours(p?.hours_worked || 0)}
                             {p?.is_night_shift && ' 🌙'}
                           </td>
+
+                          {/* Overtime — H:MM format */}
                           <td>
                             {p?.ot_hours && p.ot_hours > 0
-                              ? <span style={{ color:'var(--green)', fontWeight:700, fontFamily:'DM Mono' }}>+{p.ot_hours}h</span>
-                              : <span style={{ color:'var(--gray-200)' }}>—</span>}
+                              ? <span style={{ color:'var(--green)', fontWeight:700, fontFamily:'DM Mono' }}>+{fmtHours(p.ot_hours)}</span>
+                              : <span style={{ color:'var(--gray-200)' }}>—</span>
+                            }
                           </td>
+
+                          {/* Late */}
                           <td>
                             {p?.late_mins && p.late_mins > 0
                               ? <span style={{ color: p.late_mins>=45?'var(--red)':'var(--amber)', fontWeight:600, fontSize:12 }}>
                                   +{p.late_mins}m{p.late_mins>=45?' → Half Day':''}
                                 </span>
-                              : <span style={{ color:'var(--gray-200)' }}>—</span>}
+                              : <span style={{ color:'var(--gray-200)' }}>—</span>
+                            }
                           </td>
+
+                          {/* Status */}
                           <td><StatusBadge status={status} /></td>
+
+                          {/* Remarks */}
                           <td>
                             <input type="text" value={r.remarks} placeholder="Note..."
                               onChange={e=>updateRow(emp.id,'remarks',e.target.value)}
@@ -362,10 +389,11 @@ export default function AttendancePage() {
                         s.shift_start === (policy?.shift_start||'09:00') &&
                         s.shift_end   === (policy?.shift_end||'18:00')
 
-                      // Working hours calculate karo
                       const [sh, sm] = s.shift_start.split(':').map(Number)
                       const [eh, em] = s.shift_end.split(':').map(Number)
-                      const workHours = ((eh * 60 + em) - (sh * 60 + sm)) / 60
+                      const workMins  = (eh * 60 + em) - (sh * 60 + sm)
+                      const workHours = Math.floor(workMins / 60)
+                      const workMin   = workMins % 60
 
                       return (
                         <tr key={emp.id}>
@@ -381,57 +409,42 @@ export default function AttendancePage() {
                             </div>
                           </td>
 
-                          {/* Shift Start */}
                           <td>
-                            <input
-                              type="time"
-                              value={s.shift_start}
+                            <input type="time" value={s.shift_start}
                               onChange={e => updateShift(emp.id, 'shift_start', e.target.value)}
-                              className="form-input"
-                              style={{ width:120, padding:'6px 10px' }}
+                              className="form-input" style={{ width:120, padding:'6px 10px' }}
                             />
                           </td>
 
-                          {/* Shift End */}
                           <td>
-                            <input
-                              type="time"
-                              value={s.shift_end}
+                            <input type="time" value={s.shift_end}
                               onChange={e => updateShift(emp.id, 'shift_end', e.target.value)}
-                              className="form-input"
-                              style={{ width:120, padding:'6px 10px' }}
+                              className="form-input" style={{ width:120, padding:'6px 10px' }}
                             />
                           </td>
 
-                          {/* Grace Minutes */}
                           <td>
-                            <input
-                              type="number"
-                              value={s.grace_minutes}
+                            <input type="number" value={s.grace_minutes}
                               min={0} max={60}
                               onChange={e => updateShift(emp.id, 'grace_minutes', Number(e.target.value))}
-                              className="form-input"
-                              style={{ width:80, padding:'6px 10px' }}
+                              className="form-input" style={{ width:80, padding:'6px 10px' }}
                             />
                           </td>
 
-                          {/* Working Hours */}
+                          {/* Working Hours — H:MM format */}
                           <td>
                             <span style={{
                               fontFamily:'DM Mono', fontWeight:600,
-                              color: workHours >= 9 ? 'var(--green)' : workHours >= 8 ? 'var(--amber)' : 'var(--red)'
+                              color: workMins >= 540 ? 'var(--green)' : workMins >= 480 ? 'var(--amber)' : 'var(--red)'
                             }}>
-                              {workHours.toFixed(1)}h
+                              {workHours}h {workMin > 0 ? `${String(workMin).padStart(2,'0')}m` : ''}
                             </span>
                           </td>
 
-                          {/* Reset to Default */}
                           <td>
                             {!isDefault ? (
-                              <button
-                                onClick={() => resetToDefault(emp.id)}
-                                style={{ padding:'4px 10px', borderRadius:6, background:'var(--gray-100)', border:'1px solid var(--gray-200)', fontSize:11, cursor:'pointer', color:'var(--gray-600)' }}
-                              >
+                              <button onClick={() => resetToDefault(emp.id)}
+                                style={{ padding:'4px 10px', borderRadius:6, background:'var(--gray-100)', border:'1px solid var(--gray-200)', fontSize:11, cursor:'pointer', color:'var(--gray-600)' }}>
                                 ↩ Reset
                               </button>
                             ) : (
@@ -466,9 +479,14 @@ export default function AttendancePage() {
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>Employee</th><th>Full Days</th><th>Half Days</th>
-                      <th>Leave</th><th>Absent</th><th>Total OT</th>
-                      <th>Short Time</th><th>Late Count</th>
+                      <th>Employee</th>
+                      <th>Full Days</th>
+                      <th>Half Days</th>
+                      <th>Leave</th>
+                      <th>Absent</th>
+                      <th>Total OT</th>
+                      <th>Short Time</th>
+                      <th>Late Count</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -489,8 +507,10 @@ export default function AttendancePage() {
                         <td style={{ color:'var(--amber)', fontWeight:600 }}>{e.half_days}</td>
                         <td style={{ color:'var(--red)', fontWeight:600 }}>{e.leaves}</td>
                         <td style={{ color:'var(--gray-400)' }}>{e.absent}</td>
-                        <td style={{ color:'var(--green)', fontFamily:'DM Mono' }}>{e.total_ot}h</td>
-                        <td style={{ color:'var(--amber)', fontFamily:'DM Mono' }}>{e.total_st}h</td>
+                        {/* OT — H:MM format */}
+                        <td style={{ color:'var(--green)', fontFamily:'DM Mono' }}>{fmtHours(Number(e.total_ot))}</td>
+                        {/* Short Time — H:MM format */}
+                        <td style={{ color:'var(--amber)', fontFamily:'DM Mono' }}>{fmtHours(Number(e.total_st))}</td>
                         <td>{e.late_count > 3
                           ? <span style={{ color:'var(--red)', fontWeight:700 }}>{e.late_count} ⚠</span>
                           : e.late_count}
