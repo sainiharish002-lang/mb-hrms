@@ -32,7 +32,7 @@ export default function EmployeeAttendance() {
       const { data } = await supabase
         .from('attendance')
         .select('*')
-        .eq('employee_id', emp.id)
+        .eq('emp_id', emp.id)
         .gte('date', from)
         .lte('date', to)
         .order('date', { ascending: false })
